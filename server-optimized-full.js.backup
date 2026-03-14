@@ -1,0 +1,498 @@
+// 金融看板服务器 - 优化版本
+// 使用优化版 iTick 集成（智能调度 + 符号过滤）
+const express = require('express');
+const path = require('path');
+const axios = require('axios');
+const cors = require('cors');
+const fs = require('fs').promises;
+const app = express();
+const PORT = 3000; // 使用不同端口，避免冲突
+
+// 导入优化版 iTick 集成模块
+const { OptimizedITickClient } = require('./itick-integration-optimized');
+
+app.use(cors());
+app.use(express.json());
+app.use(express.static(path.join(__dirname, 'public')));
+
+// ==================== 优化配置 ====================
+const CONFIG = {
+  // 缓存配置
+  cacheDuration: 10 * 60 * 1000, // 10分钟
+  cacheFile: path.join(__dirname, 'market-cache-optimized.json'),
+  
+  // 监控配置
+  enableMonitoring: true,
+  logFile: path.join(__dirname, 'server-optimized.log'),
+  
+  // 符号配置（优化版）
+  symbols: [
+    // iTick 优势符号（外汇/贵金属）
+    { symbol: 'EURUSD', name: '欧元/美元', source: 'itick', priority: 1 },
+    { symbol: 'GBPUSD', name: '英镑/美元', source: 'itick', priority: 2 },
+    { symbol: 'USDJPY', name: '美元/日元', source: 'itick', priority: 3 },
+    { symbol: 'USDCNY', name: '美元/人民币', source: 'itick', priority: 4 },
+    
+    // Yahoo Finance 优势符号
+    { symbol: 'AAPL', name: '苹果', source: 'yahoo', priority: 1 },
+    { symbol: 'GOOGL', name: '谷歌', source: 'yahoo', priority: 2 },
+    { symbol: 'MSFT', name: '微软', source: 'yahoo', priority: 3 },
+    { symbol: 'TSLA', name: '特斯拉', source: 'yahoo', priority: 4 },
+    
+    // 指数
+    { symbol: '^GSPC', name: '标普500', source: 'yahoo', priority: 1 },
+    { symbol: '^IXIC', name: '纳斯达克', source: 'yahoo', priority: 2 },
+    { symbol: '^DJI', name: '道琼斯', source: 'yahoo', priority: 3 },
+    
+    // 加密货币
+    { symbol: 'BTC-USD', name: '比特币', source: 'yahoo', priority: 1 },
+    { symbol: 'ETH-USD', name: '以太坊', source: 'yahoo', priority: 2 },
+    
+    // A股
+    { symbol: '000001.SS', name: '上证指数', source: 'yahoo', priority: 1 },
+    
+    // 贵金属（备用，iTick可能不支持）
+    { symbol: 'XAUUSD', name: '黄金', source: 'yahoo', priority: 5 }
+  ]
+};
+
+// ==================== 数据缓存 ====================
+let marketCache = {
+  lastUpdate: null,
+  data: [],
+  sourceStats: {
+    itick: { success: 0, total: 0 },
+    yahoo: { success: 0, total: 0 },
+    fallback: { success: 0, total: 0 }
+  },
+  metadata: {
+    version: 'optimized-v2',
+    itickOptimized: true,
+    startupTime: new Date().toISOString()
+  }
+};
+
+// ==================== 初始化客户端 ====================
+const itickClient = new OptimizedITickClient();
+console.log('🚀 优化版金融看板服务器启动');
+console.log(`📊 监控 ${CONFIG.symbols.length} 个符号`);
+
+// ==================== 数据获取函数 ====================
+
+// 1. 从 iTick 获取数据（优化版）
+async function fetchFromITickOptimized(symbol) {
+  try {
+    console.log(`🎯 iTick 获取: ${symbol}`);
+    const data = await itickClient.getQuote(symbol);
+    
+    if (data) {
+      marketCache.sourceStats.itick.success++;
+      console.log(`✅ iTick 成功: ${symbol} = ${data.price}`);
+      return data;
+    } else {
+      marketCache.sourceStats.itick.total++;
+      console.log(`⚠️ iTick 无数据: ${symbol}`);
+      return null;
+    }
+  } catch (error) {
+    marketCache.sourceStats.itick.total++;
+    console.log(`❌ iTick 错误: ${symbol} - ${error.message}`);
+    return null;
+  }
+}
+
+// 2. 从 Yahoo Finance 获取数据
+async function fetchFromYahooFinance(symbol) {
+  try {
+    const cleanSymbol = symbol.replace(/[^\w.-]/g, '');
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${cleanSymbol}?interval=1d&range=1d`;
+    
+    console.log(`📈 Yahoo 获取: ${symbol}`);
+    
+    const response = await axios.get(url, {
+      timeout: 8000,
+      headers: { 'User-Agent': 'Mozilla/5.0' }
+    });
+    
+    if (response.data.chart.result?.[0]) {
+      const result = response.data.chart.result[0];
+      const meta = result.meta;
+      
+      if (meta.regularMarketPrice) {
+        const change = meta.regularMarketPrice - meta.previousClose;
+        const changePercent = (change / meta.previousClose) * 100;
+        
+        const name = CONFIG.symbols.find(s => s.symbol === symbol)?.name || symbol;
+        
+        marketCache.sourceStats.yahoo.success++;
+        console.log(`✅ Yahoo 成功: ${symbol} = ${meta.regularMarketPrice}`);
+        
+        return {
+          name,
+          symbol,
+          price: parseFloat(meta.regularMarketPrice.toFixed(2)),
+          change: parseFloat(change.toFixed(2)),
+          changePercent: parseFloat(changePercent.toFixed(2)),
+          source: 'yahoo',
+          timestamp: new Date().toISOString()
+        };
+      }
+    }
+    
+    marketCache.sourceStats.yahoo.total++;
+    console.log(`⚠️ Yahoo 无数据: ${symbol}`);
+    return null;
+    
+  } catch (error) {
+    marketCache.sourceStats.yahoo.total++;
+    if (error.response?.status === 429) {
+      console.log(`⚠️ Yahoo 速率限制: ${symbol}`);
+    } else {
+      console.log(`❌ Yahoo 错误: ${symbol} - ${error.message}`);
+    }
+    return null;
+  }
+}
+
+// 3. 回退数据
+function getFallbackData(symbol) {
+  const fallbackPrices = {
+    '000001.SS': { price: 3050.25, change: 15.75, changePercent: 0.52 },
+    '^GSPC': { price: 5125.50, change: 32.25, changePercent: 0.63 },
+    '^IXIC': { price: 16025.75, change: 125.50, changePercent: 0.79 },
+    '^DJI': { price: 38750.25, change: 150.75, changePercent: 0.39 },
+    'XAUUSD': { price: 2185.50, change: 12.25, changePercent: 0.56 },
+    'BTC-USD': { price: 68500.75, change: 1250.25, changePercent: 1.86 },
+    'ETH-USD': { price: 3850.25, change: 75.50, changePercent: 2.00 },
+    'USDCNY': { price: 7.1985, change: -0.0025, changePercent: -0.03 },
+    'EURUSD': { price: 1.0835, change: -0.0015, changePercent: -0.14 },
+    'GBPUSD': { price: 1.3375, change: 0.0025, changePercent: 0.19 },
+    'USDJPY': { price: 150.25, change: 0.75, changePercent: 0.50 },
+    'AAPL': { price: 175.25, change: 1.75, changePercent: 1.01 },
+    'GOOGL': { price: 152.50, change: 2.25, changePercent: 1.50 },
+    'MSFT': { price: 415.75, change: 5.25, changePercent: 1.28 },
+    'TSLA': { price: 175.50, change: 3.25, changePercent: 1.89 }
+  };
+  
+  const data = fallbackPrices[symbol];
+  if (data) {
+    const name = CONFIG.symbols.find(s => s.symbol === symbol)?.name || symbol;
+    marketCache.sourceStats.fallback.success++;
+    
+    return {
+      name,
+      symbol,
+      price: data.price,
+      change: data.change,
+      changePercent: data.changePercent,
+      source: 'fallback',
+      timestamp: new Date().toISOString()
+    };
+  }
+  
+  marketCache.sourceStats.fallback.total++;
+  return null;
+}
+
+// ==================== 智能数据获取 ====================
+
+async function fetchMarketData() {
+  console.log('\n🔄 开始获取市场数据');
+  
+  const results = [];
+  const symbolsBySource = {
+    itick: CONFIG.symbols.filter(s => s.source === 'itick'),
+    yahoo: CONFIG.symbols.filter(s => s.source === 'yahoo')
+  };
+  
+  console.log(`📊 分组: iTick=${symbolsBySource.itick.length}, Yahoo=${symbolsBySource.yahoo.length}`);
+  
+  // 1. 获取 iTick 数据（外汇/贵金属）
+  if (symbolsBySource.itick.length > 0) {
+    console.log('🎯 获取 iTick 数据...');
+    
+    // 使用批量获取，但限制数量避免速率限制
+    const itickSymbols = symbolsBySource.itick.map(s => s.symbol);
+    const maxITickPerMinute = 4; // 预留1次给健康检查
+    
+    for (let i = 0; i < itickSymbols.length; i += maxITickPerMinute) {
+      const batch = itickSymbols.slice(i, i + maxITickPerMinute);
+      
+      for (const symbol of batch) {
+        const data = await fetchFromITickOptimized(symbol);
+        if (data) {
+          results.push(data);
+        } else {
+          // iTick 失败，尝试 Yahoo 作为备用
+          console.log(`🔄 ${symbol}: iTick 失败，尝试 Yahoo`);
+          const yahooData = await fetchFromYahooFinance(symbol);
+          if (yahooData) {
+            yahooData.source = 'yahoo_fallback';
+            results.push(yahooData);
+          } else {
+            // Yahoo 也失败，使用回退
+            const fallbackData = getFallbackData(symbol);
+            if (fallbackData) results.push(fallbackData);
+          }
+        }
+        
+        // 请求间延迟（避免速率限制）
+        if (batch.indexOf(symbol) < batch.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 5000));
+        }
+      }
+      
+      // 批次间延迟
+      if (i + maxITickPerMinute < itickSymbols.length) {
+        console.log('⏳ 等待60秒（iTick速率限制）...');
+        await new Promise(resolve => setTimeout(resolve, 60000));
+      }
+    }
+  }
+  
+  // 2. 获取 Yahoo 数据（股票/指数）
+  if (symbolsBySource.yahoo.length > 0) {
+    console.log('📈 获取 Yahoo 数据...');
+    
+    // 限制并发数
+    const maxConcurrent = 3;
+    
+    for (let i = 0; i < symbolsBySource.yahoo.length; i += maxConcurrent) {
+      const batch = symbolsBySource.yahoo.slice(i, i + maxConcurrent);
+      const promises = batch.map(async (item) => {
+        const data = await fetchFromYahooFinance(item.symbol);
+        if (!data) {
+          // Yahoo 失败，使用回退
+          return getFallbackData(item.symbol);
+        }
+        return data;
+      });
+      
+      const batchResults = await Promise.allSettled(promises);
+      batchResults.forEach(result => {
+        if (result.status === 'fulfilled' && result.value) {
+          results.push(result.value);
+        }
+      });
+      
+      // 批次间延迟
+      if (i + maxConcurrent < symbolsBySource.yahoo.length) {
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
+    }
+  }
+  
+  // 更新缓存
+  marketCache.data = results;
+  marketCache.lastUpdate = new Date().toISOString();
+  
+  // 保存到磁盘
+  await saveCacheToDisk();
+  
+  console.log(`✅ 数据获取完成: ${results.length}/${CONFIG.symbols.length} 个符号`);
+  
+  // 打印统计
+  const itickSuccess = results.filter(d => d.source === 'itick').length;
+  const yahooSuccess = results.filter(d => d.source === 'yahoo').length;
+  const fallbackCount = results.filter(d => d.source === 'fallback').length;
+  
+  console.log(`📊 最终统计: iTick=${itickSuccess}, Yahoo=${yahooSuccess}, Fallback=${fallbackCount}`);
+  
+  return results;
+}
+
+// ==================== 缓存管理 ====================
+
+async function loadCacheFromDisk() {
+  try {
+    const data = await fs.readFile(CONFIG.cacheFile, 'utf8');
+    const cache = JSON.parse(data);
+    
+    // 检查缓存是否过期
+    const cacheAge = Date.now() - new Date(cache.lastUpdate).getTime();
+    if (cacheAge < CONFIG.cacheDuration) {
+      marketCache = cache;
+      console.log(`💾 从磁盘加载缓存（${Math.round(cacheAge/1000)}秒前）`);
+      return true;
+    } else {
+      console.log('💾 缓存已过期，需要更新');
+      return false;
+    }
+  } catch (error) {
+    console.log('💾 无缓存文件，需要创建');
+    return false;
+  }
+}
+
+async function saveCacheToDisk() {
+  try {
+    await fs.writeFile(CONFIG.cacheFile, JSON.stringify(marketCache, null, 2));
+    console.log('💾 缓存已保存到磁盘');
+  } catch (error) {
+    console.log('❌ 保存缓存失败:', error.message);
+  }
+}
+
+// ==================== API 路由 ====================
+
+// 主页
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// 市场数据
+app.get('/api/market-data', async (req, res) => {
+  try {
+    // 检查缓存是否有效
+    const cacheAge = marketCache.lastUpdate 
+      ? Date.now() - new Date(marketCache.lastUpdate).getTime()
+      : Infinity;
+    
+    if (cacheAge > CONFIG.cacheDuration || marketCache.data.length === 0) {
+      console.log('🔄 缓存过期或为空，获取新数据');
+      await fetchMarketData();
+    }
+    
+    res.json({
+      success: true,
+      data: marketCache.data,
+      metadata: {
+        lastUpdate: marketCache.lastUpdate,
+        cacheAge: Math.round(cacheAge/1000),
+        totalSymbols: CONFIG.symbols.length,
+        fetchedSymbols: marketCache.data.length
+      },
+      sourceStats: marketCache.sourceStats,
+      itickStats: itickClient.getStats()
+    });
+    
+  } catch (error) {
+    console.log('❌ API 错误:', error.message);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      data: marketCache.data || []
+    });
+  }
+});
+
+// 手动触发更新
+app.post('/api/update', async (req, res) => {
+  try {
+    console.log('🔄 手动触发数据更新');
+    await fetchMarketData();
+    
+    res.json({
+      success: true,
+      message: '数据更新成功',
+      lastUpdate: marketCache.lastUpdate,
+      count: marketCache.data.length
+    });
+    
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// iTick 状态
+app.get('/api/itick-status', async (req, res) => {
+  try {
+    const health = await itickClient.healthCheck();
+    
+    res.json({
+      success: true,
+      enabled: itickClient.isEnabled(),
+      health: health,
+      config: {
+        hasApiKey: !!itickClient.config.apiKey,
+        baseUrl: itickClient.config.baseUrl
+      },
+      stats: itickClient.getStats()
+    });
+    
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// 健康检查
+app.get('/api/health', (req, res) => {
+  const uptime = process.uptime();
+  
+  res.json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    cacheAge: marketCache.lastUpdate 
+      ? Math.round((Date.now() - new Date(marketCache.lastUpdate).getTime()) / 1000)
+      : null,
+    dataCount: marketCache.data?.length || 0,
+    uptime: uptime,
+    version: 'optimized-v2',
+    memory: process.memoryUsage(),
+    config: {
+      symbols: CONFIG.symbols.length,
+      cacheEnabled: true
+    }
+  });
+});
+
+// 服务器统计
+app.get('/api/stats', (req, res) => {
+  res.json({
+    cache: {
+      lastUpdate: marketCache.lastUpdate,
+      dataCount: marketCache.data.length,
+      sourceStats: marketCache.sourceStats
+    },
+    itick: itickClient.getStats(),
+    symbols: CONFIG.symbols.map(s => ({
+      symbol: s.symbol,
+      name: s.name,
+      source: s.source,
+      priority: s.priority
+    }))
+  });
+});
+
+// ==================== 启动服务器 ====================
+
+async function initializeServer() {
+  console.log('🚀 初始化优化版服务器...');
+  
+  // 尝试加载缓存
+  const cacheValid = await loadCacheFromDisk();
+  
+  if (!cacheValid || marketCache.data.length === 0) {
+    console.log('🔄 初始数据获取...');
+    await fetchMarketData();
+  } else {
+    console.log(`✅ 使用缓存数据 (${marketCache.data.length} 个符号)`);
+  }
+  
+  // 设置定时更新（每10分钟）
+  setInterval(async () => {
+    console.log('\n⏰ 定时数据更新...');
+    try {
+      await fetchMarketData();
+    } catch (error) {
+      console.log('❌ 定时更新失败:', error.message);
+    }
+  }, 10 * 60 * 1000);
+  
+  // 启动服务器
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`✅ 服务器运行在 http://0.0.0.0:${PORT}`);
+    console.log(`📊 监控 ${CONFIG.symbols.length} 个符号`);
+    console.log(`🎯 iTick 优化策略: 专注于外汇/贵金属`);
+    console.log(`💾 缓存文件: ${CONFIG.cacheFile}`);
+  });
+}
+
+// 启动
+initializeServer().catch(console.error);

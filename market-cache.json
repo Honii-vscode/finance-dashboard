@@ -1,0 +1,101 @@
+{
+  "lastUpdate": "2026-03-05T02:04:27.436Z",
+  "data": {
+    "sse": {
+      "name": "上证指数",
+      "price": 3285.42,
+      "change": 15.23,
+      "changePercent": 0.47,
+      "symbol": "000001.SS",
+      "source": "fallback",
+      "timestamp": "2026-03-05T02:04:27.436Z"
+    },
+    "sp500": {
+      "name": "标普 500",
+      "price": 5876.32,
+      "change": -12.45,
+      "changePercent": -0.21,
+      "symbol": "^GSPC",
+      "source": "fallback",
+      "timestamp": "2026-03-05T02:04:27.427Z"
+    },
+    "nasdaq": {
+      "name": "纳斯达克",
+      "price": 18234.56,
+      "change": -45.67,
+      "changePercent": -0.25,
+      "symbol": "^IXIC",
+      "source": "fallback",
+      "timestamp": "2026-03-05T02:04:27.426Z"
+    },
+    "dowjones": {
+      "name": "道琼斯",
+      "price": 38723.45,
+      "change": 123.45,
+      "changePercent": 0.32,
+      "symbol": "^DJI",
+      "source": "fallback",
+      "timestamp": "2026-03-05T02:04:27.425Z"
+    },
+    "hstech": {
+      "name": "恒生科技",
+      "price": 5123.45,
+      "change": 23.45,
+      "changePercent": 0.46,
+      "symbol": "^HSTECH",
+      "source": "fallback",
+      "timestamp": "2026-03-05T02:04:26.778Z"
+    },
+    "gold": {
+      "name": "黄金",
+      "price": 2678.9,
+      "change": 8.5,
+      "changePercent": 0.32,
+      "symbol": "GC=F",
+      "source": "fallback",
+      "timestamp": "2026-03-05T02:04:26.779Z"
+    },
+    "bitcoin": {
+      "name": "比特币",
+      "price": 94567.89,
+      "change": 1234.56,
+      "changePercent": 1.32,
+      "symbol": "BTC-USD",
+      "source": "fallback",
+      "timestamp": "2026-03-05T02:04:26.778Z"
+    },
+    "ethereum": {
+      "name": "以太坊",
+      "price": 3456.78,
+      "change": -23.45,
+      "changePercent": -0.67,
+      "symbol": "ETH-USD",
+      "source": "fallback",
+      "timestamp": "2026-03-05T02:04:26.779Z"
+    },
+    "crudeoil": {
+      "name": "原油",
+      "price": 78.45,
+      "change": -1.23,
+      "changePercent": -1.54,
+      "symbol": "CL=F",
+      "source": "fallback",
+      "timestamp": "2026-03-05T02:04:26.780Z"
+    },
+    "usdcny": {
+      "name": "美元/人民币",
+      "price": 7.25,
+      "change": 0.01,
+      "changePercent": 0.14,
+      "symbol": "USDCNY",
+      "source": "fallback",
+      "timestamp": "2026-03-05T02:04:27.415Z"
+    }
+  },
+  "sourceStats": {
+    "fallback": {
+      "success": 120,
+      "total": 120
+    }
+  }
+}

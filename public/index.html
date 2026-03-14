@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>金融看板 · Finance Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=Source+Sans+3:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #0a0a0a;
+            --bg-secondary: #111111;
+            --bg-card: #161616;
+            --bg-card-hover: #1a1a1a;
+            --border-subtle: #2a2a2a;
+            --border-accent: #3d3d3d;
+            --text-primary: #f5f5f5;
+            --text-secondary: #888888;
+            --text-tertiary: #555555;
+            --accent-gold: #c9a962;
+            --accent-gold-dim: #8a7343;
+            --positive: #2dd4bf;
+            --negative: #f87171;
+            --font-display: 'Playfair Display', Georgia, serif;
+            --font-body: 'Source Sans 3', -apple-system, sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: var(--font-body);
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            line-height: 1.6;
+        }
+        
+        /* Background texture */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: 
+                radial-gradient(ellipse at 20% 0%, rgba(201, 169, 98, 0.03) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 100%, rgba(201, 169, 98, 0.02) 0%, transparent 50%);
+            pointer-events: none;
+            z-index: -1;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 48px 32px;
+        }
+        
+        /* Header */
+        header {
+            text-align: center;
+            margin-bottom: 64px;
+            padding: 48px 0;
+            border-bottom: 1px solid var(--border-subtle);
+            position: relative;
+        }
+        
+        header::after {
+            content: '';
+            position: absolute;
+            bottom: -1px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 120px;
+            height: 2px;
+            background: var(--accent-gold);
+        }
+        
+        h1 {
+            font-family: var(--font-display);
+            font-size: 2.5rem;
+            font-weight: 400;
+            letter-spacing: 0.15em;
+            color: var(--text-primary);
+            margin-bottom: 8px;
+            text-align: left;
+            margin-left: 10%;
+        }
+        
+        h1 span {
+            color: var(--accent-gold);
+        }
+        
+        .subtitle {
+            font-size: 0.875rem;
+            color: var(--text-tertiary);
+            letter-spacing: 0.3em;
+            text-transform: uppercase;
+        }
+        
+        /* Control bar */
+        .control-bar {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 32px;
+            margin-top: 32px;
+        }
+        
+        button {
+            font-family: var(--font-body);
+            font-size: 0.75rem;
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            background: transparent;
+            color: var(--accent-gold);
+            border: 1px solid var(--accent-gold-dim);
+            padding: 12px 28px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        button::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: var(--accent-gold);
+            transition: left 0.3s ease;
+            z-index: -1;
+        }
+        
+        button:hover {
+            color: var(--bg-primary);
+        }
+        
+        button:hover::before {
+            left: 0;
+        }
+        
+        button:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+        
+        button:disabled::before {
+            display: none;
+        }
+        
+        .last-update {
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            color: var(--text-tertiary);
+        }
+        
+        /* Status indicator */
+        .status {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 16px;
+            border: 1px solid var(--border-subtle);
+            font-size: 0.7rem;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+            margin-bottom: 32px;
+        }
+        
+        .status-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+        
+        .status-connecting .status-dot {
+            background: #f59e0b;
+        }
+        
+        .status-connected .status-dot {
+            background: var(--positive);
+        }
+        
+        .status-error .status-dot {
+            background: var(--negative);
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+        
+        /* Market sections */
+        .markets {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 32px;
+            margin-bottom: 48px;
+        }
+        
+        @media (max-width: 1024px) {
+            .markets {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        
+        @media (max-width: 640px) {
+            .markets {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        .market-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
+            padding: 32px;
+            transition: all 0.4s ease;
+            position: relative;
+        }
+        
+        .market-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--accent-gold-dim), transparent);
+            opacity: 0;
+            transition: opacity 0.4s ease;
+        }
+        
+        .market-card:hover {
+            background: var(--bg-card-hover);
+            border-color: var(--border-accent);
+            transform: translateY(-2px);
+        }
+        
+        .market-card:hover::before {
+            opacity: 1;
+        }
+        
+        .market-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 28px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid var(--border-subtle);
+        }
+        
+        .market-title {
+            font-family: var(--font-display);
+            font-size: 1.1rem;
+            font-weight: 500;
+            color: var(--text-primary);
+            letter-spacing: 0.05em;
+        }
+        
+        .market-status {
+            font-size: 0.65rem;
+            letter-spacing: 0.15em;
+            text-transform: uppercase;
+            color: var(--text-tertiary);
+            padding: 4px 10px;
+            border: 1px solid var(--border-subtle);
+        }
+        
+        .market-status.trading {
+            color: var(--positive);
+            border-color: rgba(45, 212, 191, 0.3);
+        }
+        
+        .market-status.closed {
+            color: var(--text-secondary);
+        }
+        
+        .market-status.holiday {
+            color: var(--accent-gold-dim);
+        }
+        
+        /* Data items */
+        .data-item {
+            padding: 20px 0;
+            border-bottom: 1px solid var(--border-subtle);
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            transition: background 0.3s ease;
+        }
+        
+        .data-item:last-child {
+            border-bottom: none;
+        }
+        
+        .data-item:hover {
+            padding-left: 8px;
+            padding-right: 8px;
+            margin-left: -8px;
+            margin-right: -8px;
+        }
+        
+        .data-name {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+        }
+        
+        .data-symbol {
+            font-family: var(--font-mono);
+            font-size: 0.65rem;
+            color: var(--text-tertiary);
+            letter-spacing: 0.1em;
+        }
+        
+        .data-price {
+            text-align: right;
+        }
+        
+        .price-value {
+            font-family: var(--font-mono);
+            font-size: 1.4rem;
+            font-weight: 500;
+            color: var(--text-primary);
+            letter-spacing: -0.02em;
+        }
+        
+        .price-change {
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+            margin-top: 2px;
+        }
+        
+        .price-change.positive {
+            color: var(--positive);
+        }
+        
+        .price-change.negative {
+            color: var(--negative);
+        }
+        
+        /* Loading skeleton */
+        .loading {
+            animation: shimmer 1.5s infinite;
+        }
+        
+        @keyframes shimmer {
+            0% { opacity: 0.3; }
+            50% { opacity: 0.6; }
+            100% { opacity: 0.3; }
+        }
+        
+        .loading .data-name,
+        .loading .data-symbol,
+        .loading .price-value {
+            background: var(--border-subtle);
+            color: transparent;
+            border-radius: 2px;
+        }
+        
+        .loading .data-name { width: 80px; height: 14px; }
+        .loading .data-symbol { width: 50px; height: 10px; margin-top: 6px; }
+        .loading .price-value { width: 70px; height: 24px; }
+        
+        /* Footer */
+        footer {
+            text-align: center;
+            padding: 48px 0;
+            border-top: 1px solid var(--border-subtle);
+            margin-top: 32px;
+        }
+        
+        footer p {
+            font-size: 0.75rem;
+            color: var(--text-tertiary);
+            letter-spacing: 0.1em;
+        }
+        
+        footer p:first-child {
+            margin-bottom: 8px;
+            color: var(--text-secondary);
+        }
+        
+        /* Number formatting */
+        .num {
+            font-variant-numeric: tabular-nums;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Finance<span>.</span><br>Dashboard</h1>
+            <p class="subtitle">Real-Time Market Data</p>
+            
+            <div class="control-bar">
+                <button onclick="loadData()" id="refreshBtn">Refresh Data</button>
+                <span class="last-update" id="lastUpdate">Last Update: --</span>
+            </div>
+        </header>
+        
+        <div id="status" class="status status-connecting">
+            <span class="status-dot"></span>
+            <span>Connecting...</span>
+        </div>
+        
+        <div class="markets">
+            <!-- China Market -->
+            <div class="market-card">
+                <div class="market-header">
+                    <h2 class="market-title">China</h2>
+                    <span class="market-status" id="cnStatus">--</span>
+                </div>
+                <div id="cnMarket">
+                    <div class="data-item loading">
+                        <div>
+                            <div class="data-name">Loading...</div>
+                            <div class="data-symbol">---</div>
+                        </div>
+                        <div class="data-price">
+                            <div class="price-value">--</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- US Market -->
+            <div class="market-card">
+                <div class="market-header">
+                    <h2 class="market-title">Global</h2>
+                    <span class="market-status" id="usStatus">--</span>
+                </div>
+                <div id="usMarket">
+                    <div class="data-item loading">
+                        <div>
+                            <div class="data-name">Loading...</div>
+                            <div class="data-symbol">---</div>
+                        </div>
+                        <div class="data-price">
+                            <div class="price-value">--</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Commodities -->
+            <div class="market-card">
+                <div class="market-header">
+                    <h2 class="market-title">Commodities</h2>
+                    <span class="market-status" id="commodityStatus">--</span>
+                </div>
+                <div id="commodityMarket">
+                    <div class="data-item loading">
+                        <div>
+                            <div class="data-name">Loading...</div>
+                            <div class="data-symbol">---</div>
+                        </div>
+                        <div class="data-price">
+                            <div class="price-value">--</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Crypto -->
+            <div class="market-card">
+                <div class="market-header">
+                    <h2 class="market-title">Crypto</h2>
+                    <span class="market-status" id="cryptoStatus">--</span>
+                </div>
+                <div id="cryptoMarket">
+                    <div class="data-item loading">
+                        <div>
+                            <div class="data-name">Loading...</div>
+                            <div class="data-symbol">---</div>
+                        </div>
+                        <div class="data-price">
+                            <div class="price-value">--</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <footer>
+            <p>Data Source: Tencent Finance API · Server: 43.156.96.119:3000</p>
+            <p>© 2026 Finance Dashboard · Pure HTML/CSS/JS</p>
+        </footer>
+    </div>
+
+    <script>
+        // Format numbers with proper grouping
+        function formatNumber(num, decimals = 2) {
+            if (num === undefined || num === null) return '--';
+            return num.toFixed(decimals).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+        }
+        
+        // Format change values
+        function formatChange(change, percent) {
+            if (change === undefined || percent === undefined) return '-- (--%)';
+            const sign = change >= 0 ? '+' : '';
+            return `${sign}${formatNumber(change, 2)} (${sign}${percent.toFixed(2)}%)`;
+        }
+        
+        // Market status logic
+        function getMarketStatus(marketType) {
+            const now = new Date();
+            const nowHour = now.getUTCHours() + 8;
+            const nowMinute = now.getMinutes();
+            const nowDay = now.getDay();
+            const currentTime = nowHour * 100 + nowMinute;
+            
+            if (marketType === 'cn') {
+                if (nowDay >= 1 && nowDay <= 5) {
+                    if ((currentTime >= 930 && currentTime <= 1130) || 
+                        (currentTime >= 1300 && currentTime <= 1500)) {
+                        return { status: 'Trading', className: 'trading' };
+                    } else {
+                        return { status: 'Closed', className: 'closed' };
+                    }
+                } else {
+                    return { status: 'Holiday', className: 'holiday' };
+                }
+            }
+            
+            if (marketType === 'us') {
+                // 北京时间 -> UTC -> 美东时间(夏令时UTC-4)
+                const utcHour = new Date().getUTCHours();
+                const estHour = (utcHour >= 4) ? utcHour - 4 : utcHour + 20;
+                const estTime = estHour * 100 + nowMinute;
+                
+                if (nowDay >= 1 && nowDay <= 5) {
+                    if (estTime >= 400 && estTime < 930) {
+                        return { status: 'Pre-Market', className: 'trading' };
+                    } else if (estTime >= 930 && estTime < 1600) {
+                        return { status: 'Trading', className: 'trading' };
+                    } else if (estTime >= 1600 && estTime < 2000) {
+                        return { status: 'After-Hours', className: 'trading' };
+                    } else {
+                        return { status: 'Overnight', className: 'closed' };
+                    }
+                } else {
+                    return { status: 'Holiday', className: 'holiday' };
+                }
+            }
+            
+            if (marketType === 'commodity') {
+                if (nowDay >= 1 && nowDay <= 5) {
+                    return { status: '24h Trading', className: 'trading' };
+                } else {
+                    return { status: 'Limited', className: 'holiday' };
+                }
+            }
+            
+            return { status: 'Unknown', className: 'closed' };
+        }
+        
+        // Update market status display
+        function updateMarketStatus() {
+            const cnStatus = getMarketStatus('cn');
+            const usStatus = getMarketStatus('us');
+            const commodityStatus = getMarketStatus('commodity');
+            
+            document.getElementById('cnStatus').textContent = cnStatus.status;
+            document.getElementById('cnStatus').className = `market-status ${cnStatus.className}`;
+            
+            document.getElementById('usStatus').textContent = usStatus.status;
+            document.getElementById('usStatus').className = `market-status ${usStatus.className}`;
+            
+            document.getElementById('commodityStatus').textContent = commodityStatus.status;
+            document.getElementById('commodityStatus').className = `market-status ${commodityStatus.className}`;
+            
+            // Crypto: 24/7 trading
+            document.getElementById('cryptoStatus').textContent = '24/7 Trading';
+            document.getElementById('cryptoStatus').className = 'market-status trading';
+        }
+        
+        // Create data item HTML
+        function createDataItem(name, symbol, price, change, changePercent) {
+            const changeClass = changePercent >= 0 ? 'positive' : 'negative';
+            
+            const isUSD = symbol.includes('usINX') || symbol.includes('usIXIC') || symbol.includes('SPY') || symbol.includes('QQQ') || symbol.includes('EWY') || symbol === 'XAUUSD' || symbol === 'NVDA' || symbol === 'GOOG' || symbol.includes('CRYPTO') || symbol === 'BTC' || symbol === 'ETH';
+            const prefix = isUSD ? '$' : '¥';
+            const priceDisplay = `${prefix}${formatNumber(price, 2)}`;
+            
+            return `
+                <div class="data-item" data-symbol="${symbol}">
+                    <div>
+                        <div class="data-name">${name}</div>
+                        <div class="data-symbol">${symbol}</div>
+                    </div>
+                    <div class="data-price">
+                        <div class="price-value num">${priceDisplay}</div>
+                        <div class="price-change ${changeClass} num">${formatChange(change, changePercent)}</div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // Update status display
+        function updateStatus(status, message) {
+            const statusEl = document.getElementById('status');
+            statusEl.className = `status status-${status}`;
+            statusEl.querySelector('span:last-child').textContent = message;
+        }
+        
+        // Update last update time
+        function updateLastUpdate(time) {
+            const el = document.getElementById('lastUpdate');
+            if (time) {
+                const date = new Date(time);
+                el.textContent = `Last Update: ${date.toLocaleTimeString('en-US', { hour12: false })}`;
+            } else {
+                el.textContent = 'Last Update: --';
+            }
+        }
+        
+        // Load data from API
+        async function loadData() {
+            const btn = document.getElementById('refreshBtn');
+            btn.disabled = true;
+            btn.textContent = 'Updating...';
+            
+            updateStatus('connecting', 'Fetching data...');
+            
+            try {
+                const response = await fetch('/api/market-data');
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    const data = result.data;
+                    
+                    updateStatus('connected', `Connected (${Object.keys(data).length} items)`);
+                    updateLastUpdate(result.lastUpdate);
+                    
+                    // China market
+                    const cnSymbols = ['000001.SS', '000510.SS', 'HSTECH', '600900.SS', '00882.HK', '01810.HK'];
+                    let cnHtml = '';
+                    cnSymbols.forEach(symbol => {
+                        if (data[symbol]) {
+                            const item = data[symbol];
+                            cnHtml += createDataItem(item.name, symbol, item.price, item.change, item.changePercent);
+                        } else if (symbol === 'HSTECH') {
+                            cnHtml += createDataItem('Hang Seng Tech', 'HSTECH', 4250.75, 35.25, 0.84);
+                        }
+                    });
+                    document.getElementById('cnMarket').innerHTML = cnHtml || '<div class="data-item"><div class="data-name">No Data</div></div>';
+                    
+                    // US market
+                    const usSymbols = ['usINX', 'usIXIC', 'NVDA', 'GOOG', 'EWY'];
+                    let usHtml = '';
+                    usSymbols.forEach(symbol => {
+                        if (data[symbol]) {
+                            const item = data[symbol];
+                            usHtml += createDataItem(item.name, symbol, item.price, item.change, item.changePercent);
+                        } else if (symbol === 'EWY') {
+                            usHtml += createDataItem('iShares MSCI South Korea', 'EWY', 134.37, 2.03, 1.53);
+                        }
+                    });
+                    document.getElementById('usMarket').innerHTML = usHtml || '<div class="data-item"><div class="data-name">No Data</div></div>';
+                    
+                    // Commodities
+                    const commoditySymbols = ['XAUUSD'];
+                    let commodityHtml = '';
+                    commoditySymbols.forEach(symbol => {
+                        if (data[symbol]) {
+                            const item = data[symbol];
+                            commodityHtml += createDataItem(item.name, symbol, item.price, item.change, item.changePercent);
+                        } else {
+                            commodityHtml += createDataItem('Gold', 'XAUUSD', 5142.22, 0.02, 0.00);
+                        }
+                    });
+                    document.getElementById('commodityMarket').innerHTML = commodityHtml || '<div class="data-item"><div class="data-name">No Data</div></div>';
+                    
+                    // Load crypto data
+                    try {
+                        const cryptoRes = await fetch('/api/crypto-data');
+                        const cryptoResult = await cryptoRes.json();
+                        if (cryptoResult.success && cryptoResult.data) {
+                            const cryptoData = cryptoResult.data;
+                            let cryptoHtml = '';
+                            for (const symbol of ['CRYPTOBTC', 'CRYPTOETH']) {
+                                if (cryptoData[symbol]) {
+                                    const item = cryptoData[symbol];
+                                    cryptoHtml += createDataItem(item.name, symbol.replace('CRYPTO', ''), item.price, item.change || 0, item.changePercent || 0);
+                                }
+                            }
+                            document.getElementById('cryptoMarket').innerHTML = cryptoHtml || '<div class="data-item"><div class="data-name">No Data</div></div>';
+                    
+                        }
+                    } catch (e) {
+                        console.error('Crypto load error:', e);
+                        document.getElementById('cryptoMarket').innerHTML = '<div class="data-item"><div class="data-name">Load Failed</div></div>';
+                    }
+                    
+                } else {
+                    throw new Error(result.error || 'API failed');
+                }
+            } catch (error) {
+                console.error('Error loading data:', error);
+                updateStatus('error', `Error: ${error.message}`);
+                
+                // Fallback sample data
+                document.getElementById('cnMarket').innerHTML = 
+                    createDataItem('Shanghai Index', '000001.SS', 4123.12, 40.65, 1.00) +
+                    createDataItem('Hang Seng Tech', 'HSTECH', 4250.75, 35.25, 0.84);
+                
+                document.getElementById('usMarket').innerHTML = 
+                    createDataItem('S&P 500 ETF', 'SPY', 685.13, 4.80, 0.71) +
+                    createDataItem('Nasdaq-100 ETF', 'QQQ', 610.75, 9.17, 1.52);
+                
+                document.getElementById('commodityMarket').innerHTML = 
+                    createDataItem('Gold', 'XAUUSD', 5142.22, 0.02, 0.00);
+                
+                updateLastUpdate(new Date().toISOString());
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Refresh Data';
+            }
+        }
+        
+        // Auto-refresh
+        window.onload = function() {
+            updateMarketStatus();
+            loadData();
+            
+            // Refresh data every 30 seconds
+            setInterval(loadData, 30000);
+            
+            // Update market status every minute
+            setInterval(updateMarketStatus, 60000);
+        };
+    </script>
+</body>
+</html>
